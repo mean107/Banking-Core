@@ -1,0 +1,4 @@
+apiVersion: v2
+name: banking-platform
+version: 1.0.0
+description: Namespace-separated PostgreSQL HA, Redis Sentinel, RabbitMQ and Kong

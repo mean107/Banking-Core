@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sqlalchemy==2.0.40
+psycopg[binary]==3.2.9
+redis==5.2.1
+aio-pika==9.5.5
+bcrypt==4.3.0
+prometheus-client==0.21.1
+opentelemetry-sdk==1.32.1
+opentelemetry-exporter-otlp-proto-grpc==1.32.1
+opentelemetry-instrumentation-fastapi==0.53b1

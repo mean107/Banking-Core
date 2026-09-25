@@ -1,0 +1,19 @@
+backend:
+  repository: ghcr.io/mean107/banking-core-backend
+  tag: initial
+frontend:
+  repository: ghcr.io/mean107/banking-core-frontend
+  tag: initial
+replicas: 2
+imagePullPolicy: IfNotPresent
+imagePullSecrets: []
+secretName: banking-runtime
+roles: [api, auth, account, transfer, notification]
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: '1', memory: 512Mi}
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  threshold: '10'

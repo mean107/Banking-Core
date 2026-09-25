@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: kong-config, namespace: gateway}
+data:
+  kong.yml: |
+{{ include "banking.kong" . | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kong, namespace: gateway}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: kong}
+  template:
+    metadata:
+      labels: {app: kong}
+      annotations:
+        checksum/config: {{ include "banking.kong" . | sha256sum | quote }}
+    spec:
+      containers:
+        - name: kong
+          image: {{ .Values.kongImage }}
+          env:
+            - {name: KONG_DATABASE, value: 'off'}
+            - {name: KONG_DECLARATIVE_CONFIG, value: /kong/kong.yml}
+            - {name: KONG_ADMIN_LISTEN, value: 'off'}
+            - {name: KONG_PROXY_LISTEN, value: '0.0.0.0:8000'}
+          ports: [{name: proxy, containerPort: 8000}]
+          readinessProbe:
+            exec: {command: [kong, health]}
+            initialDelaySeconds: 15
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: '1', memory: 512Mi}
+          volumeMounts: [{name: config, mountPath: /kong}]
+      volumes:
+        - name: config
+          configMap: {name: kong-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kong, namespace: gateway}
+spec:
+  selector: {app: kong}
+  ports: [{name: proxy, port: 8000, targetPort: proxy}]

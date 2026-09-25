@@ -1,0 +1,18 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: banking-api-traffic}
+spec:
+  scaleTargetRef: {name: api}
+  pollingInterval: 15
+  cooldownPeriod: 120
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.observability.svc.cluster.local:9090
+        metricName: banking_api_rps
+        query: sum(rate(banking_http_requests_total{role="api"}[1m])) or vector(0)
+        threshold: {{ .Values.autoscaling.threshold | quote }}
+{{- end }}

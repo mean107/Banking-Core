@@ -1,0 +1,5 @@
+apiVersion: v2
+name: banking
+description: Banking API producer and isolated RabbitMQ consumers
+version: 1.0.0
+appVersion: '1.0.0'

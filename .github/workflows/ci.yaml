@@ -1,0 +1,98 @@
+name: Banking Core CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore: ['deploy/environments/lab/images.yaml', 'docs/**', '**.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: banking-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.4-alpine
+        env: {POSTGRES_USER: test, POSTGRES_PASSWORD: test, POSTGRES_DB: test}
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U test" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+        env: {TEST_DATABASE_URL: 'postgresql+psycopg://test:test@localhost:5432/test'}
+      - uses: azure/setup-helm@v4.3.0
+        with: {version: v3.17.3}
+      - run: |
+          helm lint deploy/charts/banking
+          helm lint deploy/charts/platform
+          helm lint deploy/charts/observability
+          helm template banking deploy/charts/banking > /tmp/banking.yaml
+          helm template platform deploy/charts/platform > /tmp/platform.yaml
+          helm template observability deploy/charts/observability > /tmp/observability.yaml
+          docker compose config --quiet
+          python scripts/validate-crds.py
+      - name: Build and integration smoke test
+        run: |
+          docker compose up -d --build --wait --wait-timeout 240
+          python scripts/smoke.py
+      - name: Capture logs
+        if: always()
+        run: docker compose logs --no-color > compose.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: compose-logs, path: compose.log}
+      - if: always()
+        run: docker compose down
+  publish:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.name }}/banking-core-backend:${{ github.sha }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.name }}/banking-core-frontend:${{ github.sha }}
+  update-gitops:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: main, fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install PyYAML==6.0.2
+      - name: Commit tested image versions
+        env: {OWNER: '${{ github.repository_owner }}', SOURCE_SHA: '${{ github.sha }}'}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA" || { echo 'main advanced; newer pipeline will deploy'; exit 0; }
+          python scripts/update-images.py --owner "$OWNER" --tag "$SOURCE_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add deploy/environments/lab/images.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(gitops): deploy $SOURCE_SHA [skip ci]"
+          git push origin HEAD:main

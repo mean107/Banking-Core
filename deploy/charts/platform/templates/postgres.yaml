@@ -1,0 +1,25 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: banking-db
+  namespace: data-postgres
+spec:
+  instances: {{ .Values.postgresInstances }}
+  imageName: {{ .Values.postgresImage }}
+  bootstrap:
+    initdb:
+      database: banking
+      owner: banking
+      secret: {name: banking-db-auth}
+  storage:
+    size: {{ .Values.storageSize }}
+    {{- if .Values.storageClass }}
+    storageClass: {{ .Values.storageClass }}
+    {{- end }}
+  affinity:
+    podAntiAffinityType: required
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {cpu: '1', memory: 1Gi}
+  monitoring:
+    enablePodMonitor: false

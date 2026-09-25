@@ -1,0 +1,7 @@
+# CI replaces initial with the full source commit SHA after publishing both images.
+backend:
+  repository: ghcr.io/mean107/banking-core-backend
+  tag: initial
+frontend:
+  repository: ghcr.io/mean107/banking-core-frontend
+  tag: initial

@@ -1,0 +1,69 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: banking-core, namespace: argocd}
+spec:
+  sourceRepos: ['https://github.com/mean107/Banking-Core.git']
+  destinations:
+    - {server: 'https://kubernetes.default.svc', namespace: banking}
+    - {server: 'https://kubernetes.default.svc', namespace: banking-platform}
+    - {server: 'https://kubernetes.default.svc', namespace: observability}
+    - {server: 'https://kubernetes.default.svc', namespace: data-postgres}
+    - {server: 'https://kubernetes.default.svc', namespace: data-redis}
+    - {server: 'https://kubernetes.default.svc', namespace: messaging}
+    - {server: 'https://kubernetes.default.svc', namespace: gateway}
+  clusterResourceWhitelist:
+    - {group: '', kind: Namespace}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: banking-platform, namespace: argocd}
+spec:
+  project: banking-core
+  source:
+    repoURL: https://github.com/mean107/Banking-Core.git
+    targetRevision: main
+    path: deploy/charts/platform
+    helm: {releaseName: banking-platform}
+  destination: {server: 'https://kubernetes.default.svc', namespace: banking-platform}
+  syncPolicy:
+    automated: {selfHeal: true, prune: false}
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: banking-observability, namespace: argocd}
+spec:
+  project: banking-core
+  source:
+    repoURL: https://github.com/mean107/Banking-Core.git
+    targetRevision: main
+    path: deploy/charts/observability
+    helm: {releaseName: banking-observability}
+  destination: {server: 'https://kubernetes.default.svc', namespace: observability}
+  syncPolicy:
+    automated: {selfHeal: true, prune: false}
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: banking, namespace: argocd}
+spec:
+  project: banking-core
+  source:
+    repoURL: https://github.com/mean107/Banking-Core.git
+    targetRevision: main
+    path: deploy/charts/banking
+    helm:
+      releaseName: banking
+      valueFiles: [../../environments/lab/images.yaml]
+  destination: {server: 'https://kubernetes.default.svc', namespace: banking}
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: api
+      jsonPointers: [/spec/replicas]
+  syncPolicy:
+    automated: {selfHeal: true, prune: true}
+    syncOptions: [CreateNamespace=true, RespectIgnoreDifferences=true]

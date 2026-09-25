@@ -1,0 +1,139 @@
+name: banking-core
+x-app: &app
+  image: banking-core-backend:local
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  restart: unless-stopped
+  environment: &env
+    DATABASE_URL: postgresql+psycopg://banking:${DB_PASSWORD:-localbanking}@postgres:5432/banking
+    REDIS_URL: redis://:${REDIS_PASSWORD:-localredis}@redis:6379/0
+    RABBITMQ_URL: amqp://banking:${RABBITMQ_PASSWORD:-localrabbit}@rabbitmq:5672/
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  depends_on:
+    migrate: {condition: service_completed_successfully}
+    redis: {condition: service_healthy}
+    rabbitmq: {condition: service_healthy}
+  healthcheck:
+    test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/ready')"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 30s
+services:
+  postgres:
+    image: postgres:17.4-alpine
+    environment:
+      POSTGRES_DB: banking
+      POSTGRES_USER: banking
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-localbanking}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U banking -d banking]
+      interval: 5s
+      retries: 12
+  redis:
+    image: redis:7.4.3-alpine
+    command: [redis-server, --appendonly, 'yes', --requirepass, '${REDIS_PASSWORD:-localredis}']
+    environment: {REDISCLI_AUTH: '${REDIS_PASSWORD:-localredis}'}
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      retries: 12
+  rabbitmq:
+    image: rabbitmq:4.1.0-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: banking
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-localrabbit}
+    volumes: [rabbitdata:/var/lib/rabbitmq]
+    ports: ['127.0.0.1:15672:15672']
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      retries: 12
+  migrate:
+    image: banking-core-backend:local
+    build: {context: ., dockerfile: backend/Dockerfile}
+    environment: *env
+    command: [python, -m, app.db]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: 'no'
+  api:
+    <<: *app
+    environment: {<<: *env, ROLE: api}
+  auth:
+    <<: *app
+    environment: {<<: *env, ROLE: auth}
+  account:
+    <<: *app
+    environment: {<<: *env, ROLE: account}
+  transfer:
+    <<: *app
+    environment: {<<: *env, ROLE: transfer}
+  notification:
+    <<: *app
+    environment: {<<: *env, ROLE: notification}
+  kong:
+    image: kong:3.9.0
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_ADMIN_LISTEN: 'off'
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+    volumes: ['./infra/kong.yaml:/kong/kong.yml:ro']
+    ports: ['127.0.0.1:8000:8000']
+    depends_on:
+      api: {condition: service_healthy}
+      notification: {condition: service_healthy}
+  frontend:
+    image: banking-core-frontend:local
+    build: ./frontend
+    ports: ['127.0.0.1:3000:80']
+    depends_on: [kong]
+  prometheus:
+    image: prom/prometheus:v3.3.0
+    profiles: [observability]
+    command: ['--config.file=/etc/prometheus/prometheus.yaml']
+    volumes: ['./observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro', 'promdata:/prometheus']
+    ports: ['127.0.0.1:9090:9090']
+  grafana:
+    image: grafana/grafana:11.6.0
+    profiles: [observability]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-localgrafana}
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ['127.0.0.1:3001:3000']
+  loki:
+    image: grafana/loki:3.4.2
+    profiles: [observability]
+    command: [-config.file=/etc/loki/config.yaml]
+    volumes: ['./observability/loki.yaml:/etc/loki/config.yaml:ro', 'lokidata:/loki']
+  tempo:
+    image: grafana/tempo:2.7.2
+    profiles: [observability]
+    command: [-config.file=/etc/tempo.yaml]
+    volumes: ['./observability/tempo.yaml:/etc/tempo.yaml:ro', 'tempodata:/var/tempo']
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    profiles: [observability]
+    command: ['--config=/etc/otel.yaml']
+    volumes: ['./observability/otel.yaml:/etc/otel.yaml:ro']
+  alloy:
+    image: grafana/alloy:v1.8.1
+    profiles: [observability]
+    command: [run, /etc/alloy/config.alloy]
+    volumes: ['./observability/alloy.docker:/etc/alloy/config.alloy:ro', '/var/run/docker.sock:/var/run/docker.sock:ro']
+volumes:
+  pgdata:
+  redisdata:
+  rabbitdata:
+  promdata:
+  grafanadata:
+  lokidata:
+  tempodata:

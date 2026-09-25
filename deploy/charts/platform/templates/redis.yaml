@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Service
+metadata: {name: redis-headless, namespace: data-redis}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector: {app: banking-redis}
+  ports:
+    - {name: redis, port: 6379}
+    - {name: sentinel, port: 26379}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: redis-start, namespace: data-redis}
+data:
+  start.sh: |
+    #!/bin/sh
+    set -eu
+    SELF="$HOSTNAME.redis-headless.data-redis.svc.cluster.local"
+    MASTER="redis-0.redis-headless.data-redis.svc.cluster.local"
+    for n in 0 1 2; do
+      FOUND=$(timeout 3 redis-cli -h "redis-$n.redis-headless.data-redis.svc.cluster.local" -p 26379 --raw sentinel get-master-addr-by-name banking 2>/dev/null | head -n 1 || true)
+      if [ -n "$FOUND" ]; then MASTER="$FOUND"; break; fi
+    done
+    if [ "$MODE" = redis ]; then
+      printf 'port 6379\nbind 0.0.0.0\nprotected-mode yes\nappendonly yes\ndir /data\nrequirepass %s\nmasterauth %s\nreplica-announce-ip %s\n' "$REDISCLI_AUTH" "$REDISCLI_AUTH" "$SELF" > /data/redis.conf
+      if [ "$SELF" != "$MASTER" ]; then echo "replicaof $MASTER 6379" >> /data/redis.conf; fi
+      exec redis-server /data/redis.conf
+    else
+      mkdir -p /data/sentinel
+      if [ ! -f /data/sentinel/sentinel.conf ]; then
+        printf 'port 26379\nbind 0.0.0.0\nprotected-mode yes\nrequirepass %s\nsentinel resolve-hostnames yes\nsentinel announce-hostnames yes\nsentinel announce-ip %s\nsentinel monitor banking %s 6379 2\nsentinel auth-pass banking %s\nsentinel down-after-milliseconds banking 10000\nsentinel failover-timeout banking 60000\nsentinel parallel-syncs banking 1\n' "$REDISCLI_AUTH" "$SELF" "$MASTER" "$REDISCLI_AUTH" > /data/sentinel/sentinel.conf
+      fi
+      exec redis-server /data/sentinel/sentinel.conf --sentinel
+    fi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: redis, namespace: data-redis}
+spec:
+  serviceName: redis-headless
+  replicas: {{ .Values.redisReplicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: {app: banking-redis}
+  template:
+    metadata:
+      labels: {app: banking-redis}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: {app: banking-redis}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        {{- range list "redis" "sentinel" }}
+        - name: {{ . }}
+          image: {{ $.Values.redisImage }}
+          command: [sh, /scripts/start.sh]
+          env:
+            - {name: MODE, value: {{ . }}}
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef: {name: redis-auth, key: password}
+          ports:
+            - {name: {{ . }}, containerPort: {{ if eq . "redis" }}6379{{ else }}26379{{ end }}}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          readinessProbe:
+            exec:
+              command: [redis-cli, -p, '{{ if eq . "redis" }}6379{{ else }}26379{{ end }}', ping]
+            initialDelaySeconds: 10
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts}
+            - {name: data, mountPath: /data}
+        {{- end }}
+      volumes:
+        - name: scripts
+          configMap: {name: redis-start}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.storageClass }}
+        storageClassName: {{ .Values.storageClass }}
+        {{- end }}
+        resources:
+          requests: {storage: {{ .Values.storageSize }}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: redis-quorum, namespace: data-redis}
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: banking-redis}

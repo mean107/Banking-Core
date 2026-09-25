@@ -1,0 +1,15 @@
+_format_version: '3.0'
+services:
+  - name: banking-api
+    url: http://api:8080
+    read_timeout: 40000
+    routes:
+      - name: api
+        paths: [/api]
+        strip_path: false
+  - name: banking-websocket
+    url: http://notification:8080
+    routes:
+      - name: websocket
+        paths: [/ws]
+        strip_path: false

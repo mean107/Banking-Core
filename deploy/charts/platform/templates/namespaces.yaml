@@ -1,0 +1,10 @@
+{{- range list "banking" "data-postgres" "data-redis" "messaging" "gateway" "observability" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ . }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-wave: '-10'
+{{- end }}

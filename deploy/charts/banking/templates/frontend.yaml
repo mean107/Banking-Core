@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: frontend}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: frontend}
+  template:
+    metadata:
+      labels: {app: frontend}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: frontend
+          image: '{{ .Values.frontend.repository }}:{{ .Values.frontend.tag }}'
+          ports: [{name: http, containerPort: 80}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: frontend}
+spec:
+  selector: {app: frontend}
+  ports: [{port: 80, targetPort: http}]
+---
+# Nginx resolves the same 'kong' host in Compose and Kubernetes.
+apiVersion: v1
+kind: Service
+metadata: {name: kong}
+spec:
+  type: ExternalName
+  externalName: kong.gateway.svc.cluster.local

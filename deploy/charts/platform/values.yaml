@@ -1,0 +1,8 @@
+storageClass: ''
+storageSize: 5Gi
+postgresInstances: 3
+redisReplicas: 3
+postgresImage: ghcr.io/cloudnative-pg/postgresql:17.4
+redisImage: redis:7.4.3-alpine
+rabbitmqImage: rabbitmq:4.1.0-management-alpine
+kongImage: kong:3.9.0

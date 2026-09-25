@@ -1,0 +1,69 @@
+{{- range .Values.roles }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ . }}
+  labels: {app: {{ . }}, part-of: banking-core}
+spec:
+  {{- if or (ne . "api") (not $.Values.autoscaling.enabled) }}
+  replicas: {{ $.Values.replicas }}
+  {{- end }}
+  selector:
+    matchLabels: {app: {{ . }}}
+  template:
+    metadata:
+      labels: {app: {{ . }}, part-of: banking-core}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: app
+          image: "{{ $.Values.backend.repository }}:{{ $.Values.backend.tag }}"
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          ports: [{name: http, containerPort: 8080}]
+          envFrom:
+            - secretRef: {name: {{ $.Values.secretName }}}
+          env:
+            - {name: ROLE, value: {{ . | quote }}}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: 'http://otel-collector.observability.svc.cluster.local:4317'}
+          resources: {{ toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: {{ . }}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ . }}
+spec:
+  selector: {app: {{ . }}}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ . }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: {{ . }}}
+{{- end }}
