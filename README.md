@@ -37,13 +37,25 @@ HTTP + message spans → OpenTelemetry Collector → Tempo → Grafana
 
 Các role backend dùng chung code/image nhưng chạy ở các container/Deployment riêng và consume queue riêng. PostgreSQL dùng schema chung. HTTP vẫn chờ consumer trả kết quả; timeout có thể là kết quả chưa xác định, không phải bằng chứng giao dịch thất bại.
 
-## Chạy local
+## Bắt đầu trên Ubuntu
+
+Hướng dẫn chi tiết theo thứ tự:
+
+1. [Chuẩn bị Ubuntu và chạy Docker Compose](docs/UBUNTU-LAB.md).
+2. [Dựng Kubernetes, Helm và GitOps](docs/DEPLOYMENT.md).
+3. [Lab chuyển tiền, monitoring, autoscaling và failover](docs/RUNBOOK.md).
+4. [Kiểm thử và trạng thái xác nhận](docs/VALIDATION.md).
+
+Các lệnh bên dưới dùng Bash trên Ubuntu 24.04 amd64.
+
+## Chạy nhanh bằng Compose
 
 Yêu cầu Docker Engine Linux/Compose v2. Dùng khoảng 4 GB RAM cho ứng dụng; thêm observability cần nhiều hơn.
 
-```powershell
+```bash
+git clone https://github.com/mean107/Banking-Core.git
 cd Banking-Core
-Copy-Item .env.example .env
+cp -n .env.example .env
 docker compose up -d --build --wait --wait-timeout 240
 ```
 
@@ -54,7 +66,7 @@ docker compose up -d --build --wait --wait-timeout 240
 
 Thêm monitoring:
 
-```powershell
+```bash
 docker compose --profile observability up -d
 ```
 
@@ -67,9 +79,9 @@ docker compose --profile observability up -d
 
 Python 3.12 và Helm 3.17.3:
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-dev.txt
 python scripts/validate.py
 python scripts/smoke.py --base-url http://localhost:8000
@@ -81,11 +93,12 @@ python scripts/smoke.py --base-url http://localhost:8000
 
 Đọc [DEPLOYMENT.md](docs/DEPLOYMENT.md). Cần 3 node schedulable, StorageClass mặc định và image đã build/publish. Image tag được quản lý trong `deploy/environments/lab/images.yaml`.
 
-```powershell
-python scripts/bootstrap.py --context YOUR_LAB_CONTEXT --gitops
+```bash
+export LAB_CONTEXT=k3d-banking-lab
+python scripts/bootstrap.py --context "$LAB_CONTEXT" --gitops
 ```
 
-Lệnh này thực sự cài operator, tạo namespace/Secret, triển khai platform/monitoring và đăng ký ArgoCD applications. Phải đặt bốn biến mật khẩu trước theo tài liệu. Không chạy trên cluster ngoài phạm vi lab.
+Trước khi chạy bootstrap, thực hiện các bước tạo cluster, chuẩn bị namespace cho Helm, credentials và image trong hướng dẫn triển khai. Lệnh trên không thay thế những bước chuẩn bị đó.
 
 ## Cấu trúc
 
@@ -105,6 +118,7 @@ docs/                 Triển khai, runbook, kiểm chứng và quyết định 
 
 ## Tài liệu và giới hạn
 
+- [Ubuntu lab](docs/UBUNTU-LAB.md): cài công cụ, Compose và truy cập qua SSH tunnel.
 - [Triển khai](docs/DEPLOYMENT.md): chuẩn bị image, cluster và GitOps.
 - [Runbook](docs/RUNBOOK.md): smoke test, load test, quan sát hệ thống và diễn tập failover.
 - [Kiểm chứng](docs/VALIDATION.md): kết quả kiểm tra và các phần chưa kiểm chứng runtime.
