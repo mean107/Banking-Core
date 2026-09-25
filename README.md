@@ -1,22 +1,25 @@
-# Banking Core — Application Operation / DevOps Lab
+# Banking Core
 
-Project thực hành vận hành ứng dụng banking nhiều service, được tổng hợp theo đúng phần **Core Banking System** trong CV Hoang Tuan Nghia. Phát triển từ ý tưởng và giao diện của [kevinram164/banking-demo](https://github.com/kevinram164/banking-demo), [series hướng dẫn Viblo](https://viblo.asia/s/0gdJzpWjVz5). Xem [nguồn gốc và thay đổi](docs/PROVENANCE.md).
+Banking Core là ứng dụng ngân hàng demo gồm đăng ký, đăng nhập, xem số dư, chuyển tiền và thông báo realtime. Các service xử lý request qua RabbitMQ, lưu giao dịch trong PostgreSQL và dùng Redis cho session, kết quả xử lý và Pub/Sub.
 
-Đây là **lab có source, cấu hình triển khai và bài kiểm chứng**, không phải core banking dùng cho tiền thật. Có cấu hình HA không đồng nghĩa đã có kết quả diễn tập HA. Trạng thái kiểm chứng tại máy được ghi tại [VALIDATION.md](docs/VALIDATION.md).
+Hệ thống chạy local bằng Docker Compose hoặc triển khai lên Kubernetes bằng Helm và ArgoCD. Đây là môi trường thực hành, không dùng cho giao dịch tiền thật.
 
-## Khớp với CV như thế nào?
+## Thành phần
 
-| Ý trong CV | Thành phần cụ thể |
+| Thành phần | Vai trò |
 |---|---|
-| Multi-service, Docker Compose → Kubernetes/Helm | React, Kong, API producer, auth/account/transfer/notification; `compose.yaml`; 3 Helm chart |
-| GitHub Actions + ArgoCD | Test → build 2 image → GHCR → commit image SHA → ArgoCD sync |
-| Prometheus, Grafana, Loki, Tempo, OpenTelemetry | Metrics API/consumer; dashboard; Alloy thu logs; trace context qua RabbitMQ |
-| KEDA scale theo traffic | ScaledObject tăng/giảm API replica theo RPS của ứng dụng |
-| RabbitMQ request buffering | Durable queue, persistent message, publisher confirm, prefetch, TTL, giới hạn queue |
-| PostgreSQL/Redis HA | CloudNativePG 3 instance; Redis 3 pod + Sentinel quorum 2; client khám phá primary |
-| Load test, persistent storage, namespace separation | k6; PVC/Compose volumes; namespace app/data/messaging/gateway/observability |
+| React + Nginx | Giao diện đăng nhập, tài khoản, chuyển tiền và thông báo |
+| FastAPI + SQLAlchemy | API producer và các service auth, account, transfer, notification |
+| Kong | Định tuyến HTTP và WebSocket |
+| RabbitMQ | Queue riêng cho từng service, persistent message và publisher confirm |
+| PostgreSQL | Lưu tài khoản, số dư, giao dịch và thông báo; CloudNativePG quản lý 3 instance trên Kubernetes |
+| Redis | Session, kết quả xử lý và Pub/Sub; 3 pod với Sentinel quorum 2 trên Kubernetes |
+| GitHub Actions + ArgoCD | Test, build image, publish GHCR, cập nhật image SHA và đồng bộ deployment |
+| Prometheus, Grafana, Loki, Tempo | Metrics, dashboard, logs và traces; thu thập qua Alloy và OpenTelemetry |
+| KEDA | Điều chỉnh số API replica theo RPS |
+| pytest + k6 | Kiểm tra nghiệp vụ, concurrency và tải |
 
-Chi tiết từng claim, file và cách chứng minh: [CV-MAPPING.md](docs/CV-MAPPING.md).
+Chuyển tiền dùng database transaction, khóa tài khoản theo thứ tự ID và idempotency key để xử lý retry. Thông báo được lưu cùng giao dịch; WebSocket đẩy thông báo tới người nhận qua Redis Pub/Sub.
 
 ## Kiến trúc
 
@@ -39,7 +42,7 @@ Các role backend dùng chung code/image nhưng chạy ở các container/Deploy
 Yêu cầu Docker Engine Linux/Compose v2. Dùng khoảng 4 GB RAM cho ứng dụng; thêm observability cần nhiều hơn.
 
 ```powershell
-cd C:\Kubernetes\Banking-Core
+cd Banking-Core
 Copy-Item .env.example .env
 docker compose up -d --build --wait --wait-timeout 240
 ```
@@ -76,7 +79,7 @@ python scripts/smoke.py --base-url http://localhost:8000
 
 ## Kubernetes / GitOps
 
-Đọc [DEPLOYMENT.md](docs/DEPLOYMENT.md). Cần 3 node schedulable, StorageClass mặc định và image đã build/publish. Repository và GHCR trong mẫu dùng `mean107/Banking-Core`; chưa có thao tác push/publish nào được thực hiện khi tạo project local.
+Đọc [DEPLOYMENT.md](docs/DEPLOYMENT.md). Cần 3 node schedulable, StorageClass mặc định và image đã build/publish. Image tag được quản lý trong `deploy/environments/lab/images.yaml`.
 
 ```powershell
 python scripts/bootstrap.py --context YOUR_LAB_CONTEXT --gitops
@@ -97,7 +100,18 @@ deploy/environments/ Image tags do CI cập nhật
 .github/workflows/   CI, integration smoke, image publication, GitOps update
 tests/                Unit, PostgreSQL concurrency, k6
 scripts/              Bootstrap, validate, smoke, cập nhật image
-docs/                 Mapping CV, triển khai, runbook, giới hạn, nguồn gốc
+docs/                 Triển khai, runbook, kiểm chứng và quyết định kỹ thuật
 ```
 
-Các version là baseline cố định để tái lập lab, không phải cam kết đang là bản mới nhất. Trước khi dùng ngoài lab cần cập nhật và đánh giá bảo mật/dependency. Không đưa Jenkins, Kafka, Vault hoặc AWS vào luồng chính vì chúng không thuộc mô tả project Core Banking trong CV.
+## Tài liệu và giới hạn
+
+- [Triển khai](docs/DEPLOYMENT.md): chuẩn bị image, cluster và GitOps.
+- [Runbook](docs/RUNBOOK.md): smoke test, load test, quan sát hệ thống và diễn tập failover.
+- [Kiểm chứng](docs/VALIDATION.md): kết quả kiểm tra và các phần chưa kiểm chứng runtime.
+- [Thiết kế và nguồn gốc](docs/PROVENANCE.md): các thay đổi so với upstream và giới hạn kỹ thuật.
+
+Các service dùng chung PostgreSQL schema. RabbitMQ chạy một node có persistent volume; KEDA chỉ scale API producer. Cấu hình HA PostgreSQL/Redis cần được kiểm tra trên cluster đích. Chưa có backup/PITR và TLS public.
+
+## Nguồn gốc
+
+Phát triển từ [kevinram164/banking-demo](https://github.com/kevinram164/banking-demo) và [series Viblo](https://viblo.asia/s/0gdJzpWjVz5). Giữ nguyên thông tin bản quyền upstream trong [MIT License](LICENSE).

@@ -1,10 +1,15 @@
-# Báo cáo kiểm chứng — 2026-09-22
+# Kiểm chứng
 
-## Đã thực hiện tại máy
+## GitHub Actions — cập nhật 2026-09-25
+
+[CI run 36092512859](https://github.com/mean107/Banking-Core/actions/runs/36092512859) của commit `68f0b08` đã hoàn tất thành công. Workflow gồm unit/API tests, PostgreSQL concurrency, Helm validation, build Compose, smoke test và publish image. Commit `c8d0a0b` cập nhật image SHA trong cấu hình GitOps.
+
+Chưa xác nhận triển khai ArgoCD trên cluster, observability end-to-end, KEDA autoscaling hoặc diễn tập failover. Chưa có số liệu CCU/RPS/P95/RTO/RPO được đo trên cluster.
+
+## Kiểm tra local — 2026-09-22
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Đọc CV và kiểm tra trực quan trang 2 | Đã đối chiếu bốn bullet đúng mục Core Banking System |
 | Python unit/API tests | **20 passed** |
 | PostgreSQL concurrency test | **1 skipped**: chưa có PostgreSQL test database |
 | Python compile | Thành công |
@@ -21,13 +26,12 @@ Test nghiệp vụ kiểm tra: bảo toàn số dư, atomicity khi từ chối g
 
 Cảnh báo build/test: dependency frontend cũ có deprecation/Browserslist warning; Python TestClient có warning về AnyIO alias. Không phải test failure. Chưa thực hiện dependency security audit toàn bộ.
 
-## Chưa chạy được / chưa thực hiện
+## Giới hạn môi trường local tại thời điểm kiểm tra
 
 - Docker CLI có sẵn nhưng không kết nối được Linux Engine (`dockerDesktopLinuxEngine` pipe không tồn tại). Đã thử khởi động Docker Desktop; Engine vẫn chưa sẵn sàng.
-- Kubeconfig hiện tại trỏ tới `https://192.168.89.133:6443`; kiểm tra read-only bị timeout.
+- Kết nối Kubernetes API bị timeout.
 - Vì vậy chưa build Docker image, chưa chạy full Compose smoke, PostgreSQL concurrency, metrics/logs/traces end-to-end, KEDA scale, failover hay load test trên cluster.
-- Chưa push GitHub, publish GHCR, chạy GitHub Actions hoặc đăng ký ArgoCD trên cluster thật.
-- Chưa có kết quả CCU/RPS/P95/RTO/RPO được đo. Không có dữ liệu giả làm bằng chứng đã vận hành.
+- Các kiểm tra CI bổ sung sau đó được ghi ở đầu tài liệu; kết quả CI không thay thế kiểm tra vận hành trên cluster.
 
 ## Tái lập kiểm tra
 

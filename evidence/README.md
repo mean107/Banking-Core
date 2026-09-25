@@ -1,7 +1,7 @@
 # Kết quả thực nghiệm
 
-Thư mục dành cho bằng chứng do bạn chạy thực tế: smoke, load test, screenshot dashboard, CI và failover.
+Lưu kết quả smoke test, load test, dashboard và failover tại đây. Ghi kèm ngày chạy, image tag và cấu hình môi trường để so sánh giữa các lần thử.
 
-Không có số liệu performance/failover được điền sẵn. Xem `../docs/VALIDATION.md` để biết các kiểm tra source/config đã thực hiện khi tạo project.
+Xem `../docs/VALIDATION.md` để biết trạng thái kiểm tra local và CI.
 
 Không commit password/session/token, database dumps hoặc logs chứa thông tin cá nhân.

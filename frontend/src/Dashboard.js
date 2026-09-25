@@ -161,12 +161,12 @@ export default function Dashboard({ onLogout }) {
             </div>
           </Card>
 
-          <Card title="Demo notes" desc="What to explain in interview">
+          <Card title="Transfer notes" desc="Using your demo account">
             <ul className="list-disc pl-5 text-sm text-slate-700 space-y-2">
-              <li>Session stored in <b>Redis</b> → backend stateless</li>
-              <li>Balance & transfers stored in <b>Postgres</b></li>
-              <li>Realtime notify via <b>WebSocket</b> (Ingress supports WS)</li>
-              <li>Cross-pod notifications use Redis Pub/Sub</li>
+              <li>New accounts start with a demo balance of 100,000 ₫.</li>
+              <li>Enter the recipient’s username and a whole-number amount.</li>
+              <li>Incoming transfers appear in your notifications.</li>
+              <li>If a transfer times out, retry the same recipient and amount.</li>
             </ul>
           </Card>
         </div>

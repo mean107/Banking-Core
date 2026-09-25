@@ -2,7 +2,7 @@
 
 ## 1. Chuẩn bị GitHub và image
 
-1. Kiểm tra source local, tạo commit rồi push lên repo mà bạn sở hữu. Việc tạo project này chưa push GitHub.
+1. Khi triển khai từ fork, cập nhật repository URL trong cấu hình ArgoCD trước khi chạy pipeline.
 2. Workflow dùng GHCR (`ghcr.io/mean107/banking-core-backend`, `...-frontend`). Nếu fork, sửa `repoURL/sourceRepos` trong ArgoCD; script image tự lấy owner của GitHub Actions.
 3. Cho workflow quyền `contents:write`, `packages:write`. Nếu branch protection chặn bot push `main`, dùng PR cho file image hoặc cấp quyền theo chính sách repo; không tắt bảo vệ một cách ngầm định.
 4. Build cả hai image và test thành công trước khi cập nhật image tag. Tag là full commit SHA, không dùng `latest`.
