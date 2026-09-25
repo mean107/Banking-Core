@@ -9,3 +9,7 @@ evidence/*.log
 *.tgz
 secrets*.yaml
 !**/templates/secrets*.yaml
+
+# Local lab documentation
+docs/*.md
+evidence/*.md
