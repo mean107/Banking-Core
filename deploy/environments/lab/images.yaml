@@ -1,6 +1,6 @@
 backend:
   repository: ghcr.io/mean107/banking-core-backend
-  tag: 5a8e4586729320edf1fc41720ade69edae6433ce
+  tag: 5bbc57fbdb7f1d3591ef3cba7403601cdfb92d8e
 frontend:
   repository: ghcr.io/mean107/banking-core-frontend
-  tag: 5a8e4586729320edf1fc41720ade69edae6433ce
+  tag: 5bbc57fbdb7f1d3591ef3cba7403601cdfb92d8e
